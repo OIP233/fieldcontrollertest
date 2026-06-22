@@ -897,6 +897,45 @@ select {
   padding: 2px 0;
 }
 
+/* ───── Sub-tabs binnen de Taak-tab ───── */
+.subtab-nav {
+  display: flex;
+  gap: 4px;
+  background: var(--surface-sunk);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 4px;
+  margin-bottom: 20px;
+}
+.subtab-btn {
+  flex: 1;
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-2);
+  background: transparent;
+  border: none;
+  border-radius: var(--r-sm);
+  padding: 9px 8px;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.subtab-btn:hover { color: var(--text-bright); background: var(--accent-soft); }
+.subtab-btn.active { color: var(--text-bright); background: var(--surface); box-shadow: var(--shadow-sm); }
+.subtab-badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+
 /* ───── Phase blocks (Taak & procedure) ───── */
 .phase-block {
   background: linear-gradient(180deg, var(--surface) 0%, var(--surface-2) 100%);
@@ -1085,6 +1124,7 @@ select {
 
   <div class="tab-strip" id="tab-strip">
     <button class="tab-btn active" data-tab="basis" onclick="switchTab('basis')"><span data-i18n="tab.basis">Scenario</span><span class="tab-issue-dot"></span></button>
+    <button class="tab-btn" data-tab="deelnemer" onclick="switchTab('deelnemer')"><span data-i18n="tab.deelnemer">Deelnemer</span><span class="tab-issue-dot"></span></button>
     <button class="tab-btn" data-tab="rollen" onclick="switchTab('rollen')"><span data-i18n="tab.rollen">Rollen</span><span class="tab-issue-dot"></span></button>
     <button class="tab-btn" data-tab="locaties" onclick="switchTab('locaties')"><span data-i18n="tab.locaties">Locaties</span><span class="tab-issue-dot"></span></button>
     <button class="tab-btn" data-tab="taak" data-only-type="procedural" onclick="switchTab('taak')"><span data-i18n="tab.taak">Taak &amp; procedure</span><span class="tab-issue-dot"></span></button>
@@ -1166,7 +1206,8 @@ const I18N = {
     toolbar: { loadExample: 'Voorbeeld laden', import: 'JSON importeren', newProcedural: '+ Procedural', newIncident: '+ Incident', newCompany: '+ Nieuw profiel' },
     editor: { title: 'Scenario bewerken', unsaved: '● Niet opgeslagen', export: '⬇ Exporteer JSON', save: 'Opslaan', tabUnavailable: 'Tab "{tab}" nog niet beschikbaar.' },
     companyEditor: { title: 'Bedrijfsprofiel bewerken', save: 'Opslaan' },
-    tab: { basis: 'Scenario', rollen: 'Rollen', locaties: 'Locaties', taak: 'Taak & procedure', incident: 'Incident & respons', holdpoints: 'Hold-points', permit: 'Werkopdracht & LMRA', beleving: 'Instructeur & AI-context' },
+    tab: { basis: 'Scenario', rollen: 'Rollen', locaties: 'Locaties', taak: 'Taak & procedure', incident: 'Incident & respons', holdpoints: 'Hold-points', permit: 'Werkopdracht & LMRA', beleving: 'Instructeur & AI-context', deelnemer: 'Deelnemer' },
+    part: { section: 'Deelnemer', hint: 'Optioneel — vul de deelnemergegevens in om het scenario te personaliseren, of laat leeg; dan vult de deelnemer ze zelf in bij de start (alleen naam verplicht).', name: 'Naam deelnemer', namePh: 'Voornaam Achternaam', role: 'Functie', rolePh: 'bijv. Veldoperator', org: 'Organisatie', orgPh: 'Bedrijfsnaam' },
     dict: {
       lsr: {
         'bypassing-safety-controls': 'Bypassing Safety Controls',
@@ -1292,13 +1333,73 @@ const I18N = {
       sopTitle: 'SOP-titel',
       sopReference: 'SOP-referentie', sopReferenceHint: 'bv. SOP-PMP-014 rev 3',
       sopSummary: 'SOP-samenvatting',
+      sopSourceLabel: 'Bron-SOP (referentietekst)',
+      sopSourceHint: 'Plak een uitgeklede of samengevatte SOP — géén vertrouwelijke details. Deze tekst gaat mee in de export, naar de AI, en is voor de deelnemer zichtbaar in de SOP-tab.',
+      sopSourceUpload: 'Bestand… (.txt/.md)',
+      sopStructBtn: '✨ Structureer naar stappen (AI)',
+      sopStructBusy: 'Bezig met structureren…',
+      sopStructNoKey: 'Stel eerst je API-sleutel in (tab Basis).',
+      sopStructNoText: 'Vul eerst het Bron-SOP-veld in.',
+      sopStructErr: 'Structureren mislukt: {msg}',
+      sopStructEmpty: 'De AI vond geen stappen in deze tekst.',
+      sopStructModalTitle: 'AI-concept — controleer en bewerk',
+      sopStructDisclaimer: 'Dit is een AI-concept op basis van je Bron-SOP. Controleer elke stap; de AI kan stappen missen, samenvoegen of verkeerd inschatten.',
+      sopStructReplace: 'Vervang bestaande stappen',
+      sopStructAppend: 'Toevoegen aan bestaande',
+      sopStructCancel: 'Annuleren',
+      sopStructCount: '{n} stap(pen) voorgesteld',
+      sopStructFillActions: 'Ook voorbereidings- en uitvoerings-acties invullen uit de stappen (label = staptitel; bij uitvoering ook criterium = verwachte melding)',
+      impTitle: 'Procedure-onvolkomenheden (questioning-attitude)',
+      impHelp: 'Bouw bewust fouten in de SOP: verkeerde volgorde, foute waarde, ontbrekende of onveilige stap. De test is of de deelnemer ze opmerkt i.p.v. ze klakkeloos uit te voeren. Zet de fout ook echt in de zichtbare stap; leg de juiste versie hieronder vast (privé voor de AI).',
+      impEmpty: 'Nog geen onvolkomenheden.',
+      impAdd: '+ Onvolkomenheid',
+      impInjectAI: '✨ Injecteer onvolkomenheid (AI)',
+      impItemLabel: 'Onvolkomenheid {n}',
+      impStep: 'Gekoppelde stap',
+      impStepNone: '— algemeen / geen specifieke stap —',
+      impTypeLabel: 'Type',
+      impTypeOrder: 'Verkeerde volgorde',
+      impTypeValue: 'Verkeerde richtlijn/waarde',
+      impTypeMissing: 'Ontbrekende stap',
+      impTypeContradiction: 'Tegenstrijdigheid',
+      impTypeReference: 'Foute/verouderde referentie',
+      impTypeUnsafe: 'Onveilige instructie',
+      impDistractor: 'Afleider — lijkt fout maar is correct',
+      impFlawed: 'Wat de deelnemer ziet (foute tekst)',
+      impFlawedHint: 'zorg dat deze fout ook echt in de zichtbare SOP-stap staat',
+      impCorrect: 'Juiste versie / waarom het klopt (privé voor AI)',
+      impConseq: 'Gevolg bij blind volgen',
+      impConseqSilent: 'Stil — alleen zichtbaar in de debrief',
+      impConseqFeel: 'Voelbaar gevolg in het veld',
+      impConseqDesc: 'Beschrijving van het voelbare gevolg (AI-regie)',
+      impDetection: "Wat telt als 'opgemerkt'",
+      impSeverity: 'Ernst (1-3)',
+      impInjectTitle: 'Onvolkomenheid genereren (AI)',
+      impInjectChooseType: 'Type fout',
+      impInjectChooseStep: 'Doelstap',
+      impInjectDistractor: 'Genereer een afleider (lijkt fout, is correct)',
+      impInjectNoSteps: 'Voeg eerst SOP-stappen toe voordat je een onvolkomenheid genereert.',
+      impInjectGenerate: 'Genereer',
+      impInjectBefore: 'Origineel (correct)',
+      impInjectAfter: 'Gewijzigd — wordt zichtbaar voor de deelnemer',
+      impInjectApply: 'Toepassen op de SOP',
+      impInjectEmpty: 'De AI leverde geen bruikbaar voorstel.',
+      impRestore: 'Herstel originele stap (en verwijder deze onvolkomenheid)',
+      subSop: 'Opdracht & SOP',
+      subPhases: 'Fases & stappen',
+      subImp: 'Onvolkomenheden',
+      subSignals: 'Signalen & feedback',
+      bronsopFilled: 'ingevuld',
+      envSignalsReadonly: 'Overzicht (alleen-lezen). Omgevingssignalen bewerk je per locatie in de tab Locaties.',
+      envSignalsManage: 'Beheer signalen in Locaties →',
+      envSignalsNoLoc: '(geen locatie)',
       envSignals: 'Omgevingssignalen',
       envSignalsHelp: 'Optionele waarnemingen die in de omgeving aanwezig zijn (een plas, een verkeerd staande klep, een vreemd geluid). De deelnemer ziet ze altijd zodra hij op de juiste locatie/fase is — de vraag is of hij ze oppikt, en of hij significante signalen onderscheidt van afleiders. Onafhankelijk van de afwijking-toggle. <em>Tip: je kunt ook per-locatie bewerken via de tab Locaties — daar zie je voor elke locatie alleen de signalen op die plek.</em>',
-      actionLog: 'Deelnemer-actielog',
-      actionLogHelp: "Een eenvoudig kladblok waarin de deelnemer zelf kan noteren wat hij doet en wanneer. Geen tijdregistratie door het systeem — de deelnemer schrijft zelf '11:42 — manometer trilling gemeld bij CRO'. Wordt meegenomen in de debrief.",
-      actionLogEnabled: 'Actielog beschikbaar voor deelnemer',
+      actionLog: 'Opmerkingen / bevindingen deelnemer',
+      actionLogHelp: "Een kladblok waarin de deelnemer opmerkingen of bevindingen over dít scenario kan noteren (bv. onduidelijke of foute stappen, suggesties). Dient als evaluatie vanuit de deelnemer en wordt in de debrief geregistreerd, zodat je scenario's kunt verbeteren.",
+      actionLogEnabled: 'Opmerkingen-veld beschikbaar voor deelnemer',
       actionLogPlaceholderLabel: 'Placeholder-tekst',
-      actionLogPlaceholderHint: "bv. 'Tijd en actie'",
+      actionLogPlaceholderHint: "bv. 'Opmerking over een stap of de procedure'",
       stepLabel: 'Stap',
       idLabel: 'ID',
       stepPhase: 'Fase', stepPhaseHint: 'verplaatst de stap',
@@ -1395,9 +1496,9 @@ const I18N = {
       refReference: 'Referentie', refReferencePlaceholder: "bv. 'EMG-PRC-008 rev 2'",
       refSummary: 'Samenvatting',
       refGuidelines: 'Kernpunten / guidelines', refGuidelinesHint: 'één per regel',
-      actionLog: 'Deelnemer-actielog',
-      actionLogHelp: "Een eenvoudig kladblok waarin de deelnemer zelf kan noteren wat hij doet en wanneer. Geen tijdregistratie door het systeem — de deelnemer schrijft zelf '13:42 — teruggetrokken naar veilige positie'. Wordt meegenomen in de debrief.",
-      actionLogPlaceholderHint: "bv. 'Tijd en actie (bv. '13:42 — bovenwinds gepositioneerd')'",
+      actionLog: 'Opmerkingen / bevindingen deelnemer',
+      actionLogHelp: "Een kladblok waarin de deelnemer opmerkingen of bevindingen over dít scenario kan noteren (bv. onduidelijke of foute stappen, suggesties). Dient als evaluatie vanuit de deelnemer en wordt in de debrief geregistreerd, zodat je scenario's kunt verbeteren.",
+      actionLogPlaceholderHint: "bv. 'Opmerking over een stap of de procedure'",
     },
     signals: {
       fromActionLabel: 'Verschijnt vanaf actie',
@@ -1545,7 +1646,8 @@ const I18N = {
       company: { title: 'Company profiles', subtitle: 'Store company-specific context (installation, procedures, LSR set, escalation) and link a profile to a scenario. The AI receives this context automatically at scenario start, so tank codes, alarm thresholds and reporting paths match this company.' },
     },
     toolbar: { loadExample: 'Load example', import: 'Import JSON', newProcedural: '+ Procedural', newIncident: '+ Incident', newCompany: '+ New profile' },
-    tab: { basis: 'Scenario', rollen: 'Roles', locaties: 'Locations', taak: 'Task & procedure', incident: 'Incident & response', holdpoints: 'Hold points', permit: 'Work order & LMRA', beleving: 'Instructor & AI context' },
+    tab: { basis: 'Scenario', rollen: 'Roles', locaties: 'Locations', taak: 'Task & procedure', incident: 'Incident & response', holdpoints: 'Hold points', permit: 'Work order & LMRA', beleving: 'Instructor & AI context', deelnemer: 'Participant' },
+    part: { section: 'Participant', hint: 'Optional — fill in the participant details to personalise the scenario, or leave empty; the participant enters them at the start (name required).', name: 'Participant name', namePh: 'First and last name', role: 'Function', rolePh: 'e.g. Field operator', org: 'Organisation', orgPh: 'Company name' },
     dict: {
       holdCat: { lsr: 'Life-Saving Rule', procedural: 'Procedural violation', 'process-safety': 'Process safety', environmental: 'Environmental' },
       role: { dispatch: 'Control Room Operator (CRO)', colleague: 'Colleague in field', supervisor: 'Supervisor', internal: 'Internal department', transport: 'Driver / ship crew', external: 'External party' },
@@ -1652,13 +1754,73 @@ const I18N = {
       sopTitle: 'SOP title',
       sopReference: 'SOP reference', sopReferenceHint: 'e.g. SOP-PMP-014 rev 3',
       sopSummary: 'SOP summary',
+      sopSourceLabel: 'Source SOP (reference text)',
+      sopSourceHint: 'Paste a stripped-down or summarised SOP — no confidential details. This text is included in the export, sent to the AI, and visible to the participant in the SOP tab.',
+      sopSourceUpload: 'File… (.txt/.md)',
+      sopStructBtn: '✨ Structure into steps (AI)',
+      sopStructBusy: 'Structuring…',
+      sopStructNoKey: 'Set your API key first (Basics tab).',
+      sopStructNoText: 'Fill in the Source SOP field first.',
+      sopStructErr: 'Structuring failed: {msg}',
+      sopStructEmpty: 'The AI found no steps in this text.',
+      sopStructModalTitle: 'AI draft — review and edit',
+      sopStructDisclaimer: 'This is an AI draft based on your Source SOP. Check every step; the AI may miss, merge or misjudge steps.',
+      sopStructReplace: 'Replace existing steps',
+      sopStructAppend: 'Add to existing',
+      sopStructCancel: 'Cancel',
+      sopStructCount: '{n} step(s) proposed',
+      sopStructFillActions: 'Also fill preparation and execution actions from the steps (label = step title; for execution also criterion = expected report)',
+      impTitle: 'Procedure imperfections (questioning attitude)',
+      impHelp: 'Deliberately build flaws into the SOP: wrong order, wrong value, missing or unsafe step. The test is whether the participant notices them instead of executing blindly. Put the flaw into the visible step itself; record the correct version below (private to the AI).',
+      impEmpty: 'No imperfections yet.',
+      impAdd: '+ Imperfection',
+      impInjectAI: '✨ Inject imperfection (AI)',
+      impItemLabel: 'Imperfection {n}',
+      impStep: 'Linked step',
+      impStepNone: '— general / no specific step —',
+      impTypeLabel: 'Type',
+      impTypeOrder: 'Wrong order',
+      impTypeValue: 'Wrong guideline/value',
+      impTypeMissing: 'Missing step',
+      impTypeContradiction: 'Contradiction',
+      impTypeReference: 'Wrong/outdated reference',
+      impTypeUnsafe: 'Unsafe instruction',
+      impDistractor: 'Decoy — looks wrong but is correct',
+      impFlawed: 'What the participant sees (the flawed text)',
+      impFlawedHint: 'make sure this flaw is actually in the visible SOP step',
+      impCorrect: 'Correct version / why it is fine (private to AI)',
+      impConseq: 'Consequence of blind compliance',
+      impConseqSilent: 'Silent — only surfaces in the debrief',
+      impConseqFeel: 'Tangible consequence in the field',
+      impConseqDesc: 'Description of the tangible consequence (AI direction)',
+      impDetection: "What counts as 'noticed'",
+      impSeverity: 'Severity (1-3)',
+      impInjectTitle: 'Generate imperfection (AI)',
+      impInjectChooseType: 'Flaw type',
+      impInjectChooseStep: 'Target step',
+      impInjectDistractor: 'Generate a decoy (looks wrong, is correct)',
+      impInjectNoSteps: 'Add SOP steps first before generating an imperfection.',
+      impInjectGenerate: 'Generate',
+      impInjectBefore: 'Original (correct)',
+      impInjectAfter: 'Modified — becomes visible to the participant',
+      impInjectApply: 'Apply to the SOP',
+      impInjectEmpty: 'The AI returned no usable proposal.',
+      impRestore: 'Restore original step (and remove this imperfection)',
+      subSop: 'Assignment & SOP',
+      subPhases: 'Phases & steps',
+      subImp: 'Imperfections',
+      subSignals: 'Signals & feedback',
+      bronsopFilled: 'filled in',
+      envSignalsReadonly: 'Overview (read-only). Edit environment signals per location in the Locations tab.',
+      envSignalsManage: 'Manage signals in Locations →',
+      envSignalsNoLoc: '(no location)',
       envSignals: 'Environmental signals',
       envSignalsHelp: 'Optional observations present in the environment (a puddle, a wrongly set valve, a strange noise). The participant always sees them once they are at the right location/phase — the question is whether they pick up on them, and whether they distinguish significant signals from distractors. Independent of the deviation toggle. <em>Tip: you can also edit per location via the Locations tab — there you see, for each location, only the signals in that spot.</em>',
-      actionLog: 'Participant action log',
-      actionLogHelp: "A simple notepad in which the participant can note what they do and when. No time logging by the system — the participant writes '11:42 — reported pressure-gauge vibration to CRO' themselves. Included in the debrief.",
-      actionLogEnabled: 'Action log available to participant',
+      actionLog: 'Participant remarks / findings',
+      actionLogHelp: "A notepad in which the participant can jot down remarks or findings about this scenario (e.g. unclear or incorrect steps, suggestions). Serves as participant feedback and is recorded in the debrief so you can improve scenarios.",
+      actionLogEnabled: 'Remarks field available to participant',
       actionLogPlaceholderLabel: 'Placeholder text',
-      actionLogPlaceholderHint: "e.g. 'Time and action'",
+      actionLogPlaceholderHint: "e.g. 'Remark about a step or the procedure'",
       stepLabel: 'Step',
       idLabel: 'ID',
       stepPhase: 'Phase', stepPhaseHint: 'moves the step',
@@ -1755,9 +1917,9 @@ const I18N = {
       refReference: 'Reference', refReferencePlaceholder: "e.g. 'EMG-PRC-008 rev 2'",
       refSummary: 'Summary',
       refGuidelines: 'Key points / guidelines', refGuidelinesHint: 'one per line',
-      actionLog: 'Participant action log',
-      actionLogHelp: "A simple notepad in which the participant can note what they do and when. No time logging by the system — the participant writes '13:42 — withdrew to safe position' themselves. Included in the debrief.",
-      actionLogPlaceholderHint: "e.g. 'Time and action (e.g. '13:42 — positioned upwind')'",
+      actionLog: 'Participant remarks / findings',
+      actionLogHelp: "A notepad in which the participant can jot down remarks or findings about this scenario (e.g. unclear or incorrect steps, suggestions). Serves as participant feedback and is recorded in the debrief so you can improve scenarios.",
+      actionLogPlaceholderHint: "e.g. 'Remark about a step or the procedure'",
     },
     signals: {
       fromActionLabel: 'Appears from action',
@@ -1905,7 +2067,8 @@ const I18N = {
       company: { title: 'Unternehmensprofile', subtitle: 'Speichern Sie unternehmensspezifischen Kontext (Anlage, Verfahren, LSR-Satz, Eskalation) und verknüpfen Sie ein Profil mit einem Szenario. Die KI erhält diesen Kontext automatisch beim Szenariostart, sodass Tankcodes, Alarmschwellen und Meldewege zu diesem Unternehmen passen.' },
     },
     toolbar: { loadExample: 'Beispiel laden', import: 'JSON importieren', newProcedural: '+ Procedural', newIncident: '+ Incident', newCompany: '+ Neues Profil' },
-    tab: { basis: 'Szenario', rollen: 'Rollen', locaties: 'Standorte', taak: 'Aufgabe & Verfahren', incident: 'Incident & Reaktion', holdpoints: 'Hold-Points', permit: 'Arbeitsauftrag & LMRA', beleving: 'Instruktor & KI-Kontext' },
+    tab: { basis: 'Szenario', rollen: 'Rollen', locaties: 'Standorte', taak: 'Aufgabe & Verfahren', incident: 'Incident & Reaktion', holdpoints: 'Hold-Points', permit: 'Arbeitsauftrag & LMRA', beleving: 'Instruktor & KI-Kontext', deelnemer: 'Teilnehmer' },
+    part: { section: 'Teilnehmer', hint: 'Optional — Teilnehmerdaten ausfüllen, um das Szenario zu personalisieren, oder leer lassen; der Teilnehmer trägt sie beim Start ein (nur Name erforderlich).', name: 'Name des Teilnehmers', namePh: 'Vor- und Nachname', role: 'Funktion', rolePh: 'z. B. Feldoperator', org: 'Organisation', orgPh: 'Firmenname' },
     dict: {
       holdCat: { lsr: 'Life-Saving Rule', procedural: 'Verfahrensverstoß', 'process-safety': 'Prozesssicherheit', environmental: 'Umwelt' },
       role: { dispatch: 'Leitwarten-Operator (CRO)', colleague: 'Kollege im Feld', supervisor: 'Vorgesetzter', internal: 'Interne Abteilung', transport: 'Fahrer / Schiffsbesatzung', external: 'Externe Partei' },
@@ -2012,13 +2175,73 @@ const I18N = {
       sopTitle: 'SOP-Titel',
       sopReference: 'SOP-Referenz', sopReferenceHint: 'z. B. SOP-PMP-014 Rev. 3',
       sopSummary: 'SOP-Zusammenfassung',
+      sopSourceLabel: 'Quell-SOP (Referenztext)',
+      sopSourceHint: 'Fügen Sie eine gekürzte oder zusammengefasste SOP ein — keine vertraulichen Details. Dieser Text wird exportiert, an die KI gesendet und ist für den Teilnehmer im SOP-Tab sichtbar.',
+      sopSourceUpload: 'Datei… (.txt/.md)',
+      sopStructBtn: '✨ In Schritte strukturieren (KI)',
+      sopStructBusy: 'Strukturierung läuft…',
+      sopStructNoKey: 'Legen Sie zuerst Ihren API-Schlüssel fest (Tab Basis).',
+      sopStructNoText: 'Füllen Sie zuerst das Feld Quell-SOP aus.',
+      sopStructErr: 'Strukturierung fehlgeschlagen: {msg}',
+      sopStructEmpty: 'Die KI hat in diesem Text keine Schritte gefunden.',
+      sopStructModalTitle: 'KI-Entwurf — prüfen und bearbeiten',
+      sopStructDisclaimer: 'Dies ist ein KI-Entwurf auf Basis Ihrer Quell-SOP. Prüfen Sie jeden Schritt; die KI kann Schritte übersehen, zusammenführen oder falsch einschätzen.',
+      sopStructReplace: 'Bestehende Schritte ersetzen',
+      sopStructAppend: 'Zu bestehenden hinzufügen',
+      sopStructCancel: 'Abbrechen',
+      sopStructCount: '{n} Schritt(e) vorgeschlagen',
+      sopStructFillActions: 'Auch Vorbereitungs- und Ausführungsaktionen aus den Schritten füllen (Label = Schritttitel; bei Ausführung auch Kriterium = erwartete Meldung)',
+      impTitle: 'Verfahrensmängel (Questioning Attitude)',
+      impHelp: 'Bauen Sie bewusst Fehler in die SOP ein: falsche Reihenfolge, falscher Wert, fehlender oder unsicherer Schritt. Getestet wird, ob der Teilnehmer sie bemerkt, statt sie blind auszuführen. Bauen Sie den Fehler tatsächlich in den sichtbaren Schritt ein; hinterlegen Sie die richtige Version unten (privat für die KI).',
+      impEmpty: 'Noch keine Mängel.',
+      impAdd: '+ Mangel',
+      impInjectAI: '✨ Mangel einfügen (KI)',
+      impItemLabel: 'Mangel {n}',
+      impStep: 'Verknüpfter Schritt',
+      impStepNone: '— allgemein / kein bestimmter Schritt —',
+      impTypeLabel: 'Typ',
+      impTypeOrder: 'Falsche Reihenfolge',
+      impTypeValue: 'Falsche Vorgabe/Wert',
+      impTypeMissing: 'Fehlender Schritt',
+      impTypeContradiction: 'Widerspruch',
+      impTypeReference: 'Falsche/veraltete Referenz',
+      impTypeUnsafe: 'Unsichere Anweisung',
+      impDistractor: 'Köder — sieht falsch aus, ist aber korrekt',
+      impFlawed: 'Was der Teilnehmer sieht (der fehlerhafte Text)',
+      impFlawedHint: 'stellen Sie sicher, dass dieser Fehler tatsächlich im sichtbaren SOP-Schritt steht',
+      impCorrect: 'Richtige Version / warum es korrekt ist (privat für KI)',
+      impConseq: 'Folge bei blinder Befolgung',
+      impConseqSilent: 'Still — nur im Debrief sichtbar',
+      impConseqFeel: 'Spürbare Folge im Feld',
+      impConseqDesc: 'Beschreibung der spürbaren Folge (KI-Regie)',
+      impDetection: "Was als 'bemerkt' zählt",
+      impSeverity: 'Schweregrad (1-3)',
+      impInjectTitle: 'Mangel generieren (KI)',
+      impInjectChooseType: 'Fehlertyp',
+      impInjectChooseStep: 'Zielschritt',
+      impInjectDistractor: 'Einen Köder generieren (sieht falsch aus, ist korrekt)',
+      impInjectNoSteps: 'Fügen Sie zuerst SOP-Schritte hinzu, bevor Sie einen Mangel generieren.',
+      impInjectGenerate: 'Generieren',
+      impInjectBefore: 'Original (korrekt)',
+      impInjectAfter: 'Geändert — wird für den Teilnehmer sichtbar',
+      impInjectApply: 'Auf die SOP anwenden',
+      impInjectEmpty: 'Die KI lieferte keinen brauchbaren Vorschlag.',
+      impRestore: 'Originalschritt wiederherstellen (und diesen Mangel entfernen)',
+      subSop: 'Auftrag & SOP',
+      subPhases: 'Phasen & Schritte',
+      subImp: 'Mängel',
+      subSignals: 'Signale & Feedback',
+      bronsopFilled: 'ausgefüllt',
+      envSignalsReadonly: 'Übersicht (schreibgeschützt). Umgebungssignale bearbeiten Sie je Standort im Tab Standorte.',
+      envSignalsManage: 'Signale unter Standorte verwalten →',
+      envSignalsNoLoc: '(kein Standort)',
       envSignals: 'Umgebungssignale',
       envSignalsHelp: 'Optionale Wahrnehmungen in der Umgebung (eine Pfütze, ein falsch stehendes Ventil, ein seltsames Geräusch). Der Teilnehmer sieht sie immer, sobald er am richtigen Standort/in der richtigen Phase ist — die Frage ist, ob er sie aufgreift und signifikante Signale von Ablenkern unterscheidet. Unabhängig vom Abweichungs-Schalter. <em>Tipp: Sie können auch pro Standort über den Tab Standorte bearbeiten — dort sehen Sie für jeden Standort nur die Signale an diesem Ort.</em>',
-      actionLog: 'Teilnehmer-Aktionsprotokoll',
-      actionLogHelp: "Ein einfaches Notizfeld, in dem der Teilnehmer selbst notieren kann, was er wann tut. Keine Zeiterfassung durch das System — der Teilnehmer schreibt selbst '11:42 — Manometer-Vibration an CRO gemeldet'. Wird im Debrief berücksichtigt.",
-      actionLogEnabled: 'Aktionsprotokoll für Teilnehmer verfügbar',
+      actionLog: 'Anmerkungen / Beobachtungen des Teilnehmers',
+      actionLogHelp: "Ein Notizfeld, in dem der Teilnehmer Anmerkungen oder Beobachtungen zu diesem Szenario festhalten kann (z. B. unklare oder fehlerhafte Schritte, Vorschläge). Dient als Feedback des Teilnehmers und wird im Debrief erfasst, damit Sie Szenarien verbessern können.",
+      actionLogEnabled: 'Anmerkungsfeld für Teilnehmer verfügbar',
       actionLogPlaceholderLabel: 'Platzhaltertext',
-      actionLogPlaceholderHint: "z. B. 'Zeit und Aktion'",
+      actionLogPlaceholderHint: "z. B. 'Anmerkung zu einem Schritt oder Verfahren'",
       stepLabel: 'Schritt',
       idLabel: 'ID',
       stepPhase: 'Phase', stepPhaseHint: 'verschiebt den Schritt',
@@ -2115,9 +2338,9 @@ const I18N = {
       refReference: 'Referenz', refReferencePlaceholder: "z. B. 'EMG-PRC-008 Rev. 2'",
       refSummary: 'Zusammenfassung',
       refGuidelines: 'Kernpunkte / Richtlinien', refGuidelinesHint: 'einer pro Zeile',
-      actionLog: 'Teilnehmer-Aktionsprotokoll',
-      actionLogHelp: "Ein einfaches Notizfeld, in dem der Teilnehmer selbst notieren kann, was er wann tut. Keine Zeiterfassung durch das System — der Teilnehmer schreibt selbst '13:42 — auf sichere Position zurückgezogen'. Wird im Debrief berücksichtigt.",
-      actionLogPlaceholderHint: "z. B. 'Zeit und Aktion (z. B. '13:42 — luvseitig positioniert')'",
+      actionLog: 'Anmerkungen / Beobachtungen des Teilnehmers',
+      actionLogHelp: "Ein Notizfeld, in dem der Teilnehmer Anmerkungen oder Beobachtungen zu diesem Szenario festhalten kann (z. B. unklare oder fehlerhafte Schritte, Vorschläge). Dient als Feedback des Teilnehmers und wird im Debrief erfasst, damit Sie Szenarien verbessern können.",
+      actionLogPlaceholderHint: "z. B. 'Anmerkung zu einem Schritt oder Verfahren'",
     },
     signals: {
       fromActionLabel: 'Erscheint ab Aktion',
@@ -2265,7 +2488,8 @@ const I18N = {
       company: { title: 'Perfiles de empresa', subtitle: 'Guarde el contexto específico de la empresa (instalación, procedimientos, conjunto LSR, escalado) y vincule un perfil a un escenario. La IA recibe este contexto automáticamente al iniciar el escenario, de modo que los códigos de tanque, los umbrales de alarma y las vías de notificación se ajusten a esta empresa.' },
     },
     toolbar: { loadExample: 'Cargar ejemplo', import: 'Importar JSON', newProcedural: '+ Procedural', newIncident: '+ Incident', newCompany: '+ Nuevo perfil' },
-    tab: { basis: 'Escenario', rollen: 'Roles', locaties: 'Ubicaciones', taak: 'Tarea y procedimiento', incident: 'Incident y respuesta', holdpoints: 'Hold points', permit: 'Orden de trabajo y LMRA', beleving: 'Instructor y contexto IA' },
+    tab: { basis: 'Escenario', rollen: 'Roles', locaties: 'Ubicaciones', taak: 'Tarea y procedimiento', incident: 'Incident y respuesta', holdpoints: 'Hold points', permit: 'Orden de trabajo y LMRA', beleving: 'Instructor y contexto IA', deelnemer: 'Participante' },
+    part: { section: 'Participante', hint: 'Opcional — rellena los datos del participante para personalizar el escenario, o déjalo vacío; el participante los introduce al inicio (nombre obligatorio).', name: 'Nombre del participante', namePh: 'Nombre y apellidos', role: 'Función', rolePh: 'p. ej. Operador de campo', org: 'Organización', orgPh: 'Nombre de la empresa' },
     dict: {
       holdCat: { lsr: 'Life-Saving Rule', procedural: 'Infracción de procedimiento', 'process-safety': 'Seguridad de procesos', environmental: 'Medioambiental' },
       role: { dispatch: 'Operador de sala de control (CRO)', colleague: 'Compañero en campo', supervisor: 'Supervisor', internal: 'Departamento interno', transport: 'Conductor / tripulación de buque', external: 'Parte externa' },
@@ -2372,13 +2596,73 @@ const I18N = {
       sopTitle: 'Título del SOP',
       sopReference: 'Referencia del SOP', sopReferenceHint: 'p. ej. SOP-PMP-014 rev 3',
       sopSummary: 'Resumen del SOP',
+      sopSourceLabel: 'SOP de origen (texto de referencia)',
+      sopSourceHint: 'Pega una versión resumida o reducida del SOP — sin detalles confidenciales. Este texto se incluye en la exportación, se envía a la IA y es visible para el participante en la pestaña SOP.',
+      sopSourceUpload: 'Archivo… (.txt/.md)',
+      sopStructBtn: '✨ Estructurar en pasos (IA)',
+      sopStructBusy: 'Estructurando…',
+      sopStructNoKey: 'Configura primero tu clave API (pestaña Básico).',
+      sopStructNoText: 'Completa primero el campo SOP de origen.',
+      sopStructErr: 'Error al estructurar: {msg}',
+      sopStructEmpty: 'La IA no encontró pasos en este texto.',
+      sopStructModalTitle: 'Borrador de IA — revisa y edita',
+      sopStructDisclaimer: 'Este es un borrador de IA basado en tu SOP de origen. Revisa cada paso; la IA puede omitir, combinar o malinterpretar pasos.',
+      sopStructReplace: 'Reemplazar pasos existentes',
+      sopStructAppend: 'Añadir a los existentes',
+      sopStructCancel: 'Cancelar',
+      sopStructCount: '{n} paso(s) propuesto(s)',
+      sopStructFillActions: 'Rellenar también las acciones de preparación y ejecución a partir de los pasos (etiqueta = título del paso; en ejecución también criterio = reporte esperado)',
+      impTitle: 'Imperfecciones del procedimiento (questioning attitude)',
+      impHelp: 'Introduce errores deliberados en el SOP: orden incorrecto, valor erróneo, paso ausente o inseguro. La prueba es si el participante los detecta en vez de ejecutarlos a ciegas. Pon el error en el paso visible; registra la versión correcta abajo (privada para la IA).',
+      impEmpty: 'Aún no hay imperfecciones.',
+      impAdd: '+ Imperfección',
+      impInjectAI: '✨ Inyectar imperfección (IA)',
+      impItemLabel: 'Imperfección {n}',
+      impStep: 'Paso vinculado',
+      impStepNone: '— general / sin paso específico —',
+      impTypeLabel: 'Tipo',
+      impTypeOrder: 'Orden incorrecto',
+      impTypeValue: 'Directriz/valor incorrecto',
+      impTypeMissing: 'Paso ausente',
+      impTypeContradiction: 'Contradicción',
+      impTypeReference: 'Referencia errónea/obsoleta',
+      impTypeUnsafe: 'Instrucción insegura',
+      impDistractor: 'Señuelo — parece erróneo pero es correcto',
+      impFlawed: 'Lo que ve el participante (el texto erróneo)',
+      impFlawedHint: 'asegúrate de que este error esté realmente en el paso visible del SOP',
+      impCorrect: 'Versión correcta / por qué está bien (privado para la IA)',
+      impConseq: 'Consecuencia si se cumple a ciegas',
+      impConseqSilent: 'Silencioso — solo aparece en el debrief',
+      impConseqFeel: 'Consecuencia perceptible en el campo',
+      impConseqDesc: 'Descripción de la consecuencia perceptible (dirección de la IA)',
+      impDetection: "Qué cuenta como 'detectado'",
+      impSeverity: 'Gravedad (1-3)',
+      impInjectTitle: 'Generar imperfección (IA)',
+      impInjectChooseType: 'Tipo de error',
+      impInjectChooseStep: 'Paso objetivo',
+      impInjectDistractor: 'Generar un señuelo (parece erróneo, es correcto)',
+      impInjectNoSteps: 'Añade primero pasos del SOP antes de generar una imperfección.',
+      impInjectGenerate: 'Generar',
+      impInjectBefore: 'Original (correcto)',
+      impInjectAfter: 'Modificado — será visible para el participante',
+      impInjectApply: 'Aplicar al SOP',
+      impInjectEmpty: 'La IA no devolvió ninguna propuesta utilizable.',
+      impRestore: 'Restaurar paso original (y eliminar esta imperfección)',
+      subSop: 'Tarea & SOP',
+      subPhases: 'Fases y pasos',
+      subImp: 'Imperfecciones',
+      subSignals: 'Señales y feedback',
+      bronsopFilled: 'rellenado',
+      envSignalsReadonly: 'Resumen (solo lectura). Edita las señales del entorno por ubicación en la pestaña Ubicaciones.',
+      envSignalsManage: 'Gestionar señales en Ubicaciones →',
+      envSignalsNoLoc: '(sin ubicación)',
       envSignals: 'Señales del entorno',
       envSignalsHelp: 'Observaciones opcionales presentes en el entorno (un charco, una válvula mal posicionada, un ruido extraño). El participante siempre las ve en cuanto está en la ubicación/fase correcta — la cuestión es si las capta y si distingue las señales significativas de los distractores. Independiente del interruptor de desviación. <em>Consejo: también puede editar por ubicación desde la pestaña Ubicaciones — allí ve, para cada ubicación, solo las señales de ese lugar.</em>',
-      actionLog: 'Registro de acciones del participante',
-      actionLogHelp: "Un bloc de notas sencillo en el que el participante puede anotar qué hace y cuándo. El sistema no registra el tiempo — el propio participante escribe '11:42 — vibración del manómetro notificada al CRO'. Se incluye en el debrief.",
-      actionLogEnabled: 'Registro de acciones disponible para el participante',
+      actionLog: 'Observaciones / hallazgos del participante',
+      actionLogHelp: "Un bloc de notas donde el participante puede anotar observaciones o hallazgos sobre este escenario (p. ej. pasos poco claros o incorrectos, sugerencias). Sirve como feedback del participante y se registra en el debrief para que puedas mejorar los escenarios.",
+      actionLogEnabled: 'Campo de observaciones disponible para el participante',
       actionLogPlaceholderLabel: 'Texto de marcador',
-      actionLogPlaceholderHint: "p. ej. 'Hora y acción'",
+      actionLogPlaceholderHint: "p. ej. 'Observación sobre un paso o el procedimiento'",
       stepLabel: 'Paso',
       idLabel: 'ID',
       stepPhase: 'Fase', stepPhaseHint: 'mueve el paso',
@@ -2475,9 +2759,9 @@ const I18N = {
       refReference: 'Referencia', refReferencePlaceholder: "p. ej. 'EMG-PRC-008 rev 2'",
       refSummary: 'Resumen',
       refGuidelines: 'Puntos clave / directrices', refGuidelinesHint: 'uno por línea',
-      actionLog: 'Registro de acciones del participante',
-      actionLogHelp: "Un bloc de notas sencillo en el que el participante puede anotar qué hace y cuándo. El sistema no registra el tiempo — el propio participante escribe '13:42 — retirado a posición segura'. Se incluye en el debrief.",
-      actionLogPlaceholderHint: "p. ej. 'Hora y acción (p. ej. '13:42 — posicionado a barlovento')'",
+      actionLog: 'Observaciones / hallazgos del participante',
+      actionLogHelp: "Un bloc de notas donde el participante puede anotar observaciones o hallazgos sobre este escenario (p. ej. pasos poco claros o incorrectos, sugerencias). Sirve como feedback del participante y se registra en el debrief para que puedas mejorar los escenarios.",
+      actionLogPlaceholderHint: "p. ej. 'Observación sobre un paso o el procedimiento'",
     },
     signals: {
       fromActionLabel: 'Aparece a partir de la acción',
@@ -2755,6 +3039,7 @@ function newProceduralScenario() {
       title: '',
       reference: '',
       summary: '',
+      sourceText: '',                 // Laag 1: geplakte/uitgeklede echte SOP — vrij formaat, referentie voor AI + deelnemer
       steps: [],
     },
     deviation: {
@@ -2769,10 +3054,11 @@ function newProceduralScenario() {
       commonMistakes: [],
       lsrViolationsAtRisk: [],
     },
+    sopImperfections: [],             // bewust ingebouwde fouten IN de procedure (questioning-attitude test)
     observableSignals: [],            // statische omgevingssignalen, zie SIGNIFICANCE_LEVELS
     participantActionLog: {
       enabled: true,
-      placeholder: "Tijd en actie (bv. '11:42 — manometer trilling gemeld bij CRO')",
+      placeholder: "Opmerking of bevinding over dit scenario (bv. 'stap 2 lijkt in de verkeerde volgorde te staan')",
     },
     holdPoints: [],
     instructor: {
@@ -2856,7 +3142,7 @@ function newIncidentScenario() {
     observableSignals: [],            // statische omgevingssignalen, zie SIGNIFICANCE_LEVELS
     participantActionLog: {
       enabled: true,
-      placeholder: "Tijd en actie (bv. '13:42 — teruggetrokken naar bovenwindse positie')",
+      placeholder: "Opmerking of bevinding over dit scenario (bv. 'situatie was onduidelijk bij aankomst')",
     },
     referenceProcedure: {
       title: '',
@@ -3728,8 +4014,10 @@ function normalizeScenario(sc) {
     if ('normTime' in sc) delete sc.normTime;
   } else {
     // Procedural — vereiste velden garanderen
-    if (!sc.sop)         sc.sop = { title: '', reference: '', summary: '', steps: [] };
+    if (!sc.sop)         sc.sop = { title: '', reference: '', summary: '', sourceText: '', steps: [] };
     if (!Array.isArray(sc.sop.steps)) sc.sop.steps = [];
+    if (typeof sc.sop.sourceText !== 'string') sc.sop.sourceText = '';
+    if (!Array.isArray(sc.sopImperfections)) sc.sopImperfections = [];
     if (!sc.assignment)  sc.assignment = { title: '', prepActions: [], executeActions: [], secureAdvice: '' };
     if (!Array.isArray(sc.assignment.prepActions))    sc.assignment.prepActions = [];
     if (!Array.isArray(sc.assignment.executeActions)) sc.assignment.executeActions = [];
@@ -4321,6 +4609,30 @@ function updateBriefingCounter(len) {
 }
 
 /* — ROLLEN — */
+TAB_RENDERERS.deelnemer = function() {
+  const sc = STATE.current;
+  const p = sc.participant || {};
+  return `
+    <div class="section">
+      <div class="section-title">${t('part.section')}</div>
+      <p class="hint" style="margin:-6px 0 16px">${t('part.hint')}</p>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="field-label">${t('part.name')}</label>
+          <input type="text" value="${escapeAttr(p.name || '')}" oninput="updateField('participant.name', this.value)" placeholder="${escapeAttr(t('part.namePh'))}">
+        </div>
+        <div class="form-group">
+          <label class="field-label">${t('part.role')}</label>
+          <input type="text" value="${escapeAttr(p.role || '')}" oninput="updateField('participant.role', this.value)" placeholder="${escapeAttr(t('part.rolePh'))}">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="field-label">${t('part.org')}</label>
+        <input type="text" value="${escapeAttr(p.org || '')}" oninput="updateField('participant.org', this.value)" placeholder="${escapeAttr(t('part.orgPh'))}">
+      </div>
+    </div>`;
+};
+
 TAB_RENDERERS.rollen = function() {
   const sc = STATE.current;
   const roles = sc.roles || [];
@@ -4719,13 +5031,24 @@ TAB_RENDERERS.taak = function() {
     </div>
     ${directionBlock('secure')}`;
 
-  // ===== eindmontage =====
-  return `
+  // ===== eindmontage — sub-tabs binnen de Taak-tab =====
+  const sub = STATE._taakSub || 'sop';
+  const impCount = (sc.sopImperfections || []).length;
+  const sigCount = (sc.observableSignals || []).length;
+
+  const subnav = `
+    <div class="subtab-nav">
+      <button class="subtab-btn ${sub === 'sop' ? 'active' : ''}" onclick="switchTaakSub('sop')">${t('taak.subSop')}</button>
+      <button class="subtab-btn ${sub === 'phases' ? 'active' : ''}" onclick="switchTaakSub('phases')">${t('taak.subPhases')}</button>
+      <button class="subtab-btn ${sub === 'imp' ? 'active' : ''}" onclick="switchTaakSub('imp')">${t('taak.subImp')}${impCount ? ` <span class="subtab-badge">${impCount}</span>` : ''}</button>
+      <button class="subtab-btn ${sub === 'signals' ? 'active' : ''}" onclick="switchTaakSub('signals')">${t('taak.subSignals')}${sigCount ? ` <span class="subtab-badge">${sigCount}</span>` : ''}</button>
+    </div>`;
+
+  // — Groep 1: Opdracht & SOP (Bron-SOP nu inklapbaar) —
+  const sopGroup = `
     <div class="section">
       <div class="section-title">${t('taak.headTitle')}</div>
-      <div class="section-help">
-        ${t('taak.intro')}
-      </div>
+      <div class="section-help">${t('taak.intro')}</div>
       <div class="form-group">
         <label class="field-label">${t('taak.assignmentTitle')} <span class="hint">${t('taak.assignmentTitleHint')}</span></label>
         <input type="text" value="${escapeAttr(a.title || '')}" oninput="updateField('assignment.title', this.value)">
@@ -4746,18 +5069,37 @@ TAB_RENDERERS.taak = function() {
       </div>
     </div>
 
+    <details class="phase-block" ${STATE._taakOpen['bronsop'] ? 'open' : ''} ontoggle="onPhaseToggle('bronsop', this.open)">
+      <summary class="phase-summary">
+        <span class="chevron">▶</span>
+        <span class="phase-name">${t('taak.sopSourceLabel')}</span>
+        <span class="phase-meta">${(sc.sop?.sourceText || '').trim() ? t('taak.bronsopFilled') : ''}</span>
+      </summary>
+      <div class="phase-body">
+        <div class="form-group">
+          <textarea rows="6" oninput="updateField('sop.sourceText', this.value)">${escapeHtml(sc.sop?.sourceText || '')}</textarea>
+          <div class="hint" style="margin-top:4px">${t('taak.sopSourceHint')}</div>
+          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+            <button type="button" class="btn" onclick="importSopSourceFile()">${t('taak.sopSourceUpload')}</button>
+            <button type="button" id="sop-structure-btn" class="btn btn-primary" onclick="structureSopFromSource()">${t('taak.sopStructBtn')}</button>
+          </div>
+        </div>
+      </div>
+    </details>`;
+
+  // — Groep 2: Fases & stappen —
+  const phasesGroup = `
     ${phaseBlock('prep', 1, dictPhaseProc()['prep'], prepBody, t('taak.metaStepsActions', { steps: prep.count, actions: prepActs.length }))}
     ${phaseBlock('execute', 2, dictPhaseProc()['execute'], execBody, t('taak.metaStepsActions', { steps: exec.count, actions: execActs.length }))}
     ${phaseBlock('deviation', 3, dictPhaseProc()['deviation'], devBody, devEnabled ? (sc.deviation?.triggerAfterStepId ? t('taak.devTriggerSet') : t('taak.devNoTrigger')) : t('taak.devOff'))}
-    ${phaseBlock('secure', 4, dictPhaseProc()['secure'], secureBody, t('taak.metaSteps', { steps: secure.count }))}
+    ${phaseBlock('secure', 4, dictPhaseProc()['secure'], secureBody, t('taak.metaSteps', { steps: secure.count }))}`;
 
-    <div class="section">
-      <div class="section-title">${t('taak.envSignals')}</div>
-      <div class="section-help">
-        ${t('taak.envSignalsHelp')}
-      </div>
-      ${renderObservableSignalsSection()}
-    </div>
+  // — Groep 3: Onvolkomenheden —
+  const impGroup = renderImperfectionsSection();
+
+  // — Groep 4: Signalen & feedback —
+  const signalsGroup = `
+    ${renderSignalsSummary()}
 
     <div class="section">
       <div class="section-title">${t('taak.actionLog')}</div>
@@ -4770,9 +5112,20 @@ TAB_RENDERERS.taak = function() {
         <label class="field-label">${t('taak.actionLogPlaceholderLabel')}</label>
         <input type="text" value="${escapeAttr(sc.participantActionLog?.placeholder || '')}" oninput="updateField('participantActionLog.placeholder', this.value)" placeholder="${t('taak.actionLogPlaceholderHint')}">
       </div>
-    </div>
-  `;
+    </div>`;
+
+  return `
+    ${subnav}
+    ${sub === 'sop' ? sopGroup : ''}
+    ${sub === 'phases' ? phasesGroup : ''}
+    ${sub === 'imp' ? impGroup : ''}
+    ${sub === 'signals' ? signalsGroup : ''}`;
 };
+
+function switchTaakSub(id) {
+  STATE._taakSub = id;
+  renderTab('taak');
+}
 
 function onPhaseToggle(phase, isOpen) {
   STATE._taakOpen = STATE._taakOpen || {};
@@ -4805,6 +5158,223 @@ function addSopStep(phase) {
   }));
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// Bron-SOP (Laag 1) + AI-structurering naar uitvoeringsstappen (Laag 2)
+// ─────────────────────────────────────────────────────────────────────────
+
+// .txt/.md inlezen en in het Bron-SOP-veld zetten.
+function importSopSourceFile() {
+  if (!STATE.current || STATE.current.scenarioType === 'incident') return;
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = '.txt,.md,text/plain,text/markdown';
+  inp.onchange = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      if (!STATE.current.sop) STATE.current.sop = { title: '', reference: '', summary: '', sourceText: '', steps: [] };
+      STATE.current.sop.sourceText = String(ev.target.result || '');
+      markUnsaved();
+      renderTab('taak');
+    };
+    reader.readAsText(file);
+  };
+  inp.click();
+}
+
+// Robuuste JSON-array-extractie uit een AI-antwoord; normaliseert naar het sop.steps-schema.
+function parseSopStepsJSON(text) {
+  let raw = String(text || '').replace(/```json/gi, '').replace(/```/g, '').trim();
+  const start = raw.indexOf('[');
+  const end = raw.lastIndexOf(']');
+  if (start >= 0 && end > start) raw = raw.slice(start, end + 1);
+  let arr;
+  try { arr = JSON.parse(raw); } catch (e) { return []; }
+  if (!Array.isArray(arr)) return [];
+  const validPhase = ['prep', 'execute'];   // geen 'secure' bij AI-structurering: secure/onbekend → 'execute'
+  return arr
+    .filter(s => s && typeof s === 'object')
+    .map(s => ({
+      phase: validPhase.includes(s.phase) ? s.phase : 'execute',
+      label: String(s.label || '').trim(),
+      instruction: String(s.instruction || '').trim(),
+      expectedAction: String(s.expectedAction || '').trim(),
+      lsrTags: Array.isArray(s.lsrTags)
+        ? s.lsrTags.map(String).filter(tag => LSR_IDS.indexOf(tag) >= 0)
+        : [],
+    }))
+    .filter(s => s.label || s.instruction);
+}
+
+// Stuurt de Bron-SOP naar Claude en vraagt om gestructureerde stappen.
+async function structureSopFromSource() {
+  const sc = STATE.current;
+  if (!sc || sc.scenarioType === 'incident') return;
+  const src = (sc.sop && sc.sop.sourceText || '').trim();
+  if (!CONTROLLER_API_KEY) { toast(t('taak.sopStructNoKey')); return; }
+  if (!src) { toast(t('taak.sopStructNoText')); return; }
+
+  const btn = document.getElementById('sop-structure-btn');
+  const restore = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = t('taak.sopStructBusy'); }
+
+  try {
+    const profile = getCompanyProfile(sc.linkedProfileId);
+    const lsrSetName = profile && profile.lsrSet ? String(profile.lsrSet).trim() : '';
+    const lsrLine = 'Kies lsrTags UITSLUITEND uit deze vaste lijst (laat leeg als niets van toepassing is): '
+      + LSR_IDS.join(', ') + '.'
+      + (lsrSetName ? ' De leidende LSR-set bij dit bedrijf is: ' + lsrSetName + '.' : '');
+
+    const prompt = `Je bent een veiligheidskundige die een Standard Operating Procedure (SOP) omzet naar gestructureerde uitvoeringsstappen voor een trainingsscenario voor veldoperators.
+
+Hieronder staat ruwe SOP-tekst (mogelijk een uitgeklede of samengevatte versie). Zet hem om naar een JSON-array van stap-objecten. Elk object heeft EXACT deze velden:
+- "phase": exact één van "prep" (voorbereiding) of "execute" (uitvoering). Gebruik GEEN andere fase; reken afrond-/veiligstel-handelingen mee tot "execute"
+- "order": geheel getal, oplopend en bij 1 beginnend BINNEN elke fase
+- "label": korte titel van de stap (max ~8 woorden)
+- "instruction": de concrete handeling in 1-2 zinnen, gebiedende wijs
+- "expectedAction": wat de operator hierover via de radio aan de controlekamer zou melden
+- "lsrTags": array van strings. ${lsrLine}
+
+Regels:
+- Deel stappen logisch in over ALLEEN prep en execute op basis van de inhoud; een aparte veiligstel-fase bestaat hier niet.
+- Verzin GEEN stappen die niet in de tekst staan; vat alleen samen en structureer.
+- Schrijf in dezelfde taal als de SOP-tekst.
+- Antwoord met UITSLUITEND de JSON-array. Geen uitleg, geen code-fences.
+
+SOP-tekst:
+"""
+${src}
+"""`;
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': CONTROLLER_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 2500,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+
+    if (!res.ok) {
+      let detail = 'HTTP ' + res.status;
+      try { const eb = await res.json(); if (eb && eb.error && eb.error.message) detail += ' — ' + eb.error.message; } catch (e) {}
+      throw new Error(detail);
+    }
+
+    const data = await res.json();
+    const text = (data.content || []).map(b => b && b.text || '').join('').trim();
+    const steps = parseSopStepsJSON(text);
+    if (!steps.length) { toast(t('taak.sopStructEmpty')); return; }
+    openSopDraftModal(steps);
+  } catch (e) {
+    toast(t('taak.sopStructErr', { msg: (e && e.message) || String(e) }));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = restore || t('taak.sopStructBtn'); }
+  }
+}
+
+// Toont de AI-conceptstappen ter review vóór ze in het scenario landen.
+function openSopDraftModal(steps) {
+  STATE._sopDraft = steps;
+  closeSopDraftModal();
+
+  const phaseName = { prep: 'Voorbereiding', execute: 'Uitvoering', secure: 'Veiligstellen' };
+  const actionableHas = steps.some(s => s.phase === 'prep' || s.phase === 'execute');
+  const rows = ['prep', 'execute', 'secure'].map(ph => {
+    const inPhase = steps.filter(s => s.phase === ph);
+    if (!inPhase.length) return '';
+    const items = inPhase.map((s, i) => `
+      <div style="padding:8px 10px;border:1px solid var(--border,#444);border-radius:6px;margin-bottom:6px;background:var(--bg-soft,#1c1c1c)">
+        <div style="font-weight:600">${i + 1}. ${escapeHtml(s.label)}</div>
+        <div style="font-size:12px;opacity:.85;margin-top:2px">${escapeHtml(s.instruction)}</div>
+        ${s.expectedAction ? `<div style="font-size:11px;opacity:.7;margin-top:4px">→ meldt: ${escapeHtml(s.expectedAction)}</div>` : ''}
+        ${s.lsrTags.length ? `<div style="font-size:11px;margin-top:4px;color:var(--accent,#e0a93b)">LSR: ${s.lsrTags.map(escapeHtml).join(', ')}</div>` : ''}
+      </div>`).join('');
+    return `<div style="margin-bottom:12px"><div style="font-weight:700;text-transform:uppercase;font-size:11px;letter-spacing:.5px;opacity:.7;margin-bottom:6px">${phaseName[ph]}</div>${items}</div>`;
+  }).join('');
+
+  const overlay = document.createElement('div');
+  overlay.id = 'sop-draft-modal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px';
+  overlay.innerHTML = `
+    <div style="background:var(--bg,#161616);color:var(--text,#eee);border:1px solid var(--border,#444);border-radius:10px;max-width:680px;width:100%;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,.5)">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border,#444)">
+        <div style="font-weight:700;font-size:15px">${escapeHtml(t('taak.sopStructModalTitle'))}</div>
+        <div style="font-size:12px;opacity:.7;margin-top:4px">${escapeHtml(t('taak.sopStructCount', { n: steps.length }))}</div>
+      </div>
+      <div style="padding:14px 20px;overflow:auto;flex:1">
+        <div style="font-size:12px;opacity:.8;margin-bottom:12px;padding:8px 10px;border-left:3px solid var(--accent,#e0a93b);background:var(--bg-soft,#1c1c1c)">${escapeHtml(t('taak.sopStructDisclaimer'))}</div>
+        ${actionableHas ? `<label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;margin-bottom:14px;cursor:pointer">
+          <input type="checkbox" id="sop-draft-fill-actions" checked style="margin-top:2px">
+          <span>${escapeHtml(t('taak.sopStructFillActions'))}</span>
+        </label>` : ''}
+        ${rows}
+      </div>
+      <div style="padding:14px 20px;border-top:1px solid var(--border,#444);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+        <button type="button" class="btn" onclick="closeSopDraftModal()">${escapeHtml(t('taak.sopStructCancel'))}</button>
+        <button type="button" class="btn" onclick="applySopDraft('append')">${escapeHtml(t('taak.sopStructAppend'))}</button>
+        <button type="button" class="btn btn-primary" onclick="applySopDraft('replace')">${escapeHtml(t('taak.sopStructReplace'))}</button>
+      </div>
+    </div>`;
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) closeSopDraftModal(); });
+  document.body.appendChild(overlay);
+}
+
+function closeSopDraftModal() {
+  const el = document.getElementById('sop-draft-modal');
+  if (el) el.remove();
+}
+
+// Voegt de geaccepteerde conceptstappen toe; verse id's en order per fase.
+function applySopDraft(mode) {
+  const draft = STATE._sopDraft || [];
+  const sc = STATE.current;
+  if (!sc) return;
+  if (!sc.sop) sc.sop = { title: '', reference: '', summary: '', sourceText: '', steps: [] };
+  if (!Array.isArray(sc.sop.steps)) sc.sop.steps = [];
+  if (mode === 'replace') sc.sop.steps = [];
+
+  draft.forEach(s => {
+    const order = sc.sop.steps.filter(x => x.phase === s.phase).length + 1;
+    sc.sop.steps.push({
+      id: uid('s'), order: order, phase: s.phase,
+      label: s.label, instruction: s.instruction, locationId: null,
+      expectedAction: s.expectedAction, lsrTags: s.lsrTags || [],
+    });
+  });
+
+  // Optioneel: voorbereidings- en uitvoerings-acties vullen uit de stappen.
+  // Prep-actie = alleen label (deelnemer vinkt zelf af). Execute-actie =
+  // label (staptitel) + completionCriterion (verwachte radiomelding, voor de AI).
+  const fillCb = document.getElementById('sop-draft-fill-actions');
+  if (fillCb && fillCb.checked) {
+    if (!sc.assignment) sc.assignment = { title: '', prepActions: [], executeActions: [], secureAdvice: '' };
+    if (!Array.isArray(sc.assignment.prepActions)) sc.assignment.prepActions = [];
+    if (!Array.isArray(sc.assignment.executeActions)) sc.assignment.executeActions = [];
+    if (mode === 'replace') { sc.assignment.prepActions = []; sc.assignment.executeActions = []; }
+    draft.filter(s => s.phase === 'prep').forEach(s => {
+      sc.assignment.prepActions.push({ id: uid('a'), label: s.label });
+    });
+    draft.filter(s => s.phase === 'execute').forEach(s => {
+      sc.assignment.executeActions.push({
+        id: uid('e'), label: s.label, completionCriterion: s.expectedAction || '',
+      });
+    });
+  }
+
+  STATE._sopDraft = null;
+  closeSopDraftModal();
+  markUnsaved();
+  renderTab('taak');
+}
+
 function toggleLsrTag(stepIdx, tag, on) {
   const step = STATE.current.sop.steps[stepIdx];
   step.lsrTags = step.lsrTags || [];
@@ -4819,6 +5389,307 @@ function addPrepAction() {
 }
 function addExecuteAction() {
   arrayAdd('assignment.executeActions', () => ({ id: uid('e'), label: '', completionCriterion: '' }));
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Procedure-onvolkomenheden (questioning-attitude test) — Fase 1 + 2
+// ─────────────────────────────────────────────────────────────────────────
+const IMP_TYPE_IDS = ['order', 'value', 'missing', 'contradiction', 'reference', 'unsafe'];
+function impTypeLabel(ty) {
+  const map = { order: 'impTypeOrder', value: 'impTypeValue', missing: 'impTypeMissing',
+    contradiction: 'impTypeContradiction', reference: 'impTypeReference', unsafe: 'impTypeUnsafe' };
+  return t('taak.' + (map[ty] || 'impTypeValue'));
+}
+
+function renderImperfectionsSection() {
+  const sc = STATE.current;
+  if (!sc || sc.scenarioType === 'incident') return '';
+  const list = sc.sopImperfections || [];
+  const steps = sc.sop?.steps || [];
+
+  const stepOpts = (sel) => [`<option value="">${t('taak.impStepNone')}</option>`]
+    .concat(steps.map(st => `<option value="${escapeAttr(st.id)}" ${sel === st.id ? 'selected' : ''}>${escapeHtml(st.label || st.id)}</option>`))
+    .join('');
+  const typeOpts = (sel) => IMP_TYPE_IDS.map(ty => `<option value="${ty}" ${sel === ty ? 'selected' : ''}>${escapeHtml(impTypeLabel(ty))}</option>`).join('');
+  const conseqOpts = (sel) => [['silent', t('taak.impConseqSilent')], ['feel', t('taak.impConseqFeel')]]
+    .map(([v, l]) => `<option value="${v}" ${sel === v ? 'selected' : ''}>${escapeHtml(l)}</option>`).join('');
+
+  const items = list.length === 0
+    ? `<div class="array-empty">${t('taak.impEmpty')}</div>`
+    : list.map((imp, i) => `
+        <div class="array-item">
+          <div class="array-item-header">
+            <span class="array-item-label">${t('taak.impItemLabel', { n: i + 1 })}${imp.isDistractor ? ' · 🎭' : ''} · <code style="font-family:var(--mono);color:var(--text-dim)">${escapeHtml(imp.id || '')}</code></span>
+            <div class="array-item-actions">
+              <button class="btn-icon" onclick="arrayMove('sopImperfections', ${i}, -1)">↑</button>
+              <button class="btn-icon" onclick="arrayMove('sopImperfections', ${i}, 1)">↓</button>
+              ${(imp.originalLabel || imp.originalInstruction) ? `<button class="btn-icon" title="${escapeAttr(t('taak.impRestore'))}" onclick="restoreImperfectionStep(${i})">↩</button>` : ''}
+              <button class="btn-icon danger" onclick="arrayRemove('sopImperfections', ${i})">✕</button>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="field-label">${t('taak.impStep')}</label>
+              <select onchange="updateField('sopImperfections.${i}.stepId', this.value)">${stepOpts(imp.stepId)}</select>
+            </div>
+            <div class="form-group">
+              <label class="field-label">${t('taak.impTypeLabel')}</label>
+              <select onchange="updateField('sopImperfections.${i}.type', this.value)">${typeOpts(imp.type || 'value')}</select>
+            </div>
+          </div>
+          <label class="checkbox-row" style="margin-bottom:8px">
+            <input type="checkbox" ${imp.isDistractor ? 'checked' : ''} onchange="updateFieldBool('sopImperfections.${i}.isDistractor', this.checked)">
+            <span class="checkbox-label">${t('taak.impDistractor')}</span>
+          </label>
+          <div class="form-group">
+            <label class="field-label">${t('taak.impFlawed')} <span class="hint">${t('taak.impFlawedHint')}</span></label>
+            <textarea rows="2" oninput="updateField('sopImperfections.${i}.flawedText', this.value)">${escapeHtml(imp.flawedText || '')}</textarea>
+          </div>
+          <div class="form-group">
+            <label class="field-label">${t('taak.impCorrect')}</label>
+            <textarea rows="2" oninput="updateField('sopImperfections.${i}.correctText', this.value)">${escapeHtml(imp.correctText || '')}</textarea>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="field-label">${t('taak.impConseq')}</label>
+              <select onchange="updateField('sopImperfections.${i}.consequence', this.value)">${conseqOpts(imp.consequence || 'silent')}</select>
+            </div>
+            <div class="form-group">
+              <label class="field-label">${t('taak.impSeverity')}</label>
+              <input type="number" min="1" max="3" value="${imp.severity ?? 2}" oninput="updateFieldNum('sopImperfections.${i}.severity', this.value)">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="field-label">${t('taak.impConseqDesc')}</label>
+            <textarea rows="2" oninput="updateField('sopImperfections.${i}.consequenceDescription', this.value)">${escapeHtml(imp.consequenceDescription || '')}</textarea>
+          </div>
+          <div class="form-group">
+            <label class="field-label">${t('taak.impDetection')}</label>
+            <textarea rows="2" oninput="updateField('sopImperfections.${i}.detectionCriteria', this.value)">${escapeHtml(imp.detectionCriteria || '')}</textarea>
+          </div>
+        </div>`).join('');
+
+  return `
+    <div class="section">
+      <div class="section-title">${t('taak.impTitle')}</div>
+      <div class="section-help">${t('taak.impHelp')}</div>
+      <div class="array-items">${items}</div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button type="button" class="btn btn-sm" onclick="addImperfection()">${t('taak.impAdd')}</button>
+        <button type="button" class="btn btn-sm" onclick="openImperfectionInjectModal()">${t('taak.impInjectAI')}</button>
+      </div>
+    </div>`;
+}
+
+function addImperfection() {
+  arrayAdd('sopImperfections', () => ({
+    id: uid('imp'), stepId: '', type: 'value', isDistractor: false,
+    flawedText: '', correctText: '', consequence: 'silent',
+    consequenceDescription: '', detectionCriteria: '', severity: 2,
+  }));
+}
+
+// — AI-injectie: kies type + doelstap, laat Claude de stap muteren —
+function openImperfectionInjectModal() {
+  const sc = STATE.current;
+  if (!sc || sc.scenarioType === 'incident') return;
+  const steps = sc.sop?.steps || [];
+  if (!steps.length) { toast(t('taak.impInjectNoSteps')); return; }
+  closeImperfectionInjectModal();
+
+  const typeOpts = IMP_TYPE_IDS.map(ty => `<option value="${ty}">${escapeHtml(impTypeLabel(ty))}</option>`).join('');
+  const stepOpts = steps.map(st => `<option value="${escapeAttr(st.id)}">${escapeHtml(st.label || st.id)}</option>`).join('');
+
+  const overlay = document.createElement('div');
+  overlay.id = 'imp-inject-modal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px';
+  overlay.innerHTML = `
+    <div style="background:var(--bg,#161616);color:var(--text,#eee);border:1px solid var(--border,#444);border-radius:10px;max-width:560px;width:100%;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,.5)">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border,#444);font-weight:700;font-size:15px">${escapeHtml(t('taak.impInjectTitle'))}</div>
+      <div id="imp-inject-body" style="padding:16px 20px;overflow:auto;flex:1">
+        <div class="form-group">
+          <label class="field-label">${t('taak.impInjectChooseStep')}</label>
+          <select id="imp-inject-step">${stepOpts}</select>
+        </div>
+        <div class="form-group">
+          <label class="field-label">${t('taak.impInjectChooseType')}</label>
+          <select id="imp-inject-type">${typeOpts}</select>
+        </div>
+        <label class="checkbox-row" style="margin-bottom:8px">
+          <input type="checkbox" id="imp-inject-distractor">
+          <span class="checkbox-label">${t('taak.impInjectDistractor')}</span>
+        </label>
+      </div>
+      <div style="padding:14px 20px;border-top:1px solid var(--border,#444);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+        <button type="button" class="btn" onclick="closeImperfectionInjectModal()">${escapeHtml(t('taak.sopStructCancel'))}</button>
+        <button type="button" id="imp-inject-go" class="btn btn-primary" onclick="injectImperfectionAI()">${escapeHtml(t('taak.impInjectGenerate'))}</button>
+      </div>
+    </div>`;
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) closeImperfectionInjectModal(); });
+  document.body.appendChild(overlay);
+}
+
+function closeImperfectionInjectModal() {
+  const el = document.getElementById('imp-inject-modal');
+  if (el) el.remove();
+}
+
+function parseImperfectionJSON(text) {
+  let raw = String(text || '').replace(/```json/gi, '').replace(/```/g, '').trim();
+  const start = raw.indexOf('{');
+  const end = raw.lastIndexOf('}');
+  if (start >= 0 && end > start) raw = raw.slice(start, end + 1);
+  try { return JSON.parse(raw); } catch (e) { return null; }
+}
+
+async function injectImperfectionAI() {
+  const sc = STATE.current;
+  if (!sc) return;
+  if (!CONTROLLER_API_KEY) { toast(t('taak.sopStructNoKey')); return; }
+  const stepId = document.getElementById('imp-inject-step')?.value || '';
+  const type = document.getElementById('imp-inject-type')?.value || 'value';
+  const isDistractor = !!document.getElementById('imp-inject-distractor')?.checked;
+  const step = (sc.sop?.steps || []).find(s => s.id === stepId);
+  if (!step) { toast(t('taak.impInjectNoSteps')); return; }
+
+  const goBtn = document.getElementById('imp-inject-go');
+  if (goBtn) { goBtn.disabled = true; goBtn.textContent = t('taak.sopStructBusy'); }
+
+  try {
+    const task = isDistractor
+      ? `Herschrijf de stap zo dat hij voor een oppervlakkige lezer VERDACHT of ongebruikelijk lijkt, maar in werkelijkheid volledig CORRECT en veilig is (een afleider). De deelnemer hoort hem NIET als fout te melden.`
+      : `Introduceer in de stap een realistische fout van het type "${type}" (${impTypeLabel(type)}). De fout moet subtiel en plausibel zijn — niet evident — zodat alleen iemand die de procedure echt begrijpt hem opmerkt.`;
+
+    const prompt = `Je helpt bij het bouwen van een veldoperator-trainingsscenario. Doel: testen of de deelnemer een onvolkomenheid in de PROCEDURE opmerkt (questioning attitude), in plaats van stappen klakkeloos uit te voeren.
+
+Hier is één correcte SOP-stap:
+- label: "${step.label || ''}"
+- instructie: "${step.instruction || ''}"
+- verwachte melding: "${step.expectedAction || ''}"
+
+${task}
+
+Antwoord met UITSLUITEND een JSON-object (geen uitleg, geen code-fences) met EXACT deze velden:
+{
+  "flawedLabel": "de (her)nieuwe staptitel die de deelnemer ziet",
+  "flawedInstruction": "de (her)nieuwe instructie die de deelnemer ziet",
+  "correctText": ${isDistractor ? '"waarom deze stap in werkelijkheid correct en veilig is"' : '"de juiste versie / wat er had moeten staan"'},
+  "consequenceDescription": ${isDistractor ? '""' : '"wat er in het veld gebeurt als de deelnemer dit klakkeloos opvolgt"'},
+  "detectionCriteria": "welk gedrag of welke uitspraak van de deelnemer telt als \\"opgemerkt\\"",
+  "explanation": "korte uitleg voor de scenario-auteur"
+}
+Schrijf in dezelfde taal als de stap.`;
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': CONTROLLER_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1200,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+    if (!res.ok) {
+      let detail = 'HTTP ' + res.status;
+      try { const eb = await res.json(); if (eb && eb.error && eb.error.message) detail += ' — ' + eb.error.message; } catch (e) {}
+      throw new Error(detail);
+    }
+    const data = await res.json();
+    const txt = (data.content || []).map(b => b && b.text || '').join('').trim();
+    const obj = parseImperfectionJSON(txt);
+    if (!obj || (!obj.flawedInstruction && !obj.flawedLabel)) { toast(t('taak.impInjectEmpty')); return; }
+
+    STATE._impDraft = { stepId, type, isDistractor, result: obj, original: { label: step.label || '', instruction: step.instruction || '' } };
+    openImperfectionPreview();
+  } catch (e) {
+    toast(t('taak.sopStructErr', { msg: (e && e.message) || String(e) }));
+  } finally {
+    if (goBtn) { goBtn.disabled = false; goBtn.textContent = t('taak.impInjectGenerate'); }
+  }
+}
+
+function openImperfectionPreview() {
+  const d = STATE._impDraft;
+  if (!d) return;
+  const body = document.getElementById('imp-inject-body');
+  const overlay = document.getElementById('imp-inject-modal');
+  if (!body || !overlay) return;
+  const r = d.result;
+  body.innerHTML = `
+    <div style="font-size:12px;opacity:.8;margin-bottom:12px;padding:8px 10px;border-left:3px solid var(--accent,#e0a93b);background:var(--bg-soft,#1c1c1c)">${escapeHtml(t('taak.sopStructDisclaimer'))}</div>
+    <div style="margin-bottom:10px">
+      <div style="font-weight:700;font-size:11px;text-transform:uppercase;opacity:.6;margin-bottom:4px">${escapeHtml(t('taak.impInjectBefore'))}</div>
+      <div style="font-size:12.5px;opacity:.85">${escapeHtml(d.original.label)} — ${escapeHtml(d.original.instruction)}</div>
+    </div>
+    <div style="margin-bottom:12px">
+      <div style="font-weight:700;font-size:11px;text-transform:uppercase;color:var(--accent,#e0a93b);margin-bottom:4px">${escapeHtml(t('taak.impInjectAfter'))}</div>
+      <div style="font-size:12.5px;font-weight:600">${escapeHtml(r.flawedLabel || d.original.label)}</div>
+      <div style="font-size:12.5px;margin-top:2px">${escapeHtml(r.flawedInstruction || '')}</div>
+    </div>
+    <div style="font-size:12px;opacity:.8;border-top:1px solid var(--border,#444);padding-top:10px">
+      <div style="margin-bottom:4px"><b>${escapeHtml(t('taak.impCorrect'))}:</b> ${escapeHtml(r.correctText || '')}</div>
+      ${r.consequenceDescription ? `<div style="margin-bottom:4px"><b>${escapeHtml(t('taak.impConseqDesc'))}:</b> ${escapeHtml(r.consequenceDescription)}</div>` : ''}
+      <div><b>${escapeHtml(t('taak.impDetection'))}:</b> ${escapeHtml(r.detectionCriteria || '')}</div>
+    </div>`;
+  // Vervang de footer-knoppen door Toepassen/Annuleren.
+  const btnBar = overlay.querySelector('#imp-inject-go') ? overlay.querySelector('#imp-inject-go').parentElement : null;
+  if (btnBar) {
+    btnBar.innerHTML = `
+      <button type="button" class="btn" onclick="closeImperfectionInjectModal()">${escapeHtml(t('taak.sopStructCancel'))}</button>
+      <button type="button" class="btn btn-primary" onclick="applyImperfectionDraft()">${escapeHtml(t('taak.impInjectApply'))}</button>`;
+  }
+}
+
+function applyImperfectionDraft() {
+  const d = STATE._impDraft;
+  const sc = STATE.current;
+  if (!d || !sc) { closeImperfectionInjectModal(); return; }
+  const step = (sc.sop?.steps || []).find(s => s.id === d.stepId);
+  const r = d.result || {};
+  if (step) {
+    if (r.flawedLabel) step.label = r.flawedLabel;
+    if (r.flawedInstruction) step.instruction = r.flawedInstruction;
+  }
+  if (!Array.isArray(sc.sopImperfections)) sc.sopImperfections = [];
+  sc.sopImperfections.push({
+    id: uid('imp'),
+    stepId: d.stepId,
+    type: d.type,
+    isDistractor: d.isDistractor,
+    flawedText: (r.flawedLabel ? r.flawedLabel + ' — ' : '') + (r.flawedInstruction || ''),
+    correctText: r.correctText || '',
+    consequence: (d.isDistractor || !r.consequenceDescription) ? 'silent' : 'feel',
+    consequenceDescription: r.consequenceDescription || '',
+    detectionCriteria: r.detectionCriteria || '',
+    severity: 2,
+    originalLabel: (d.original && d.original.label) || '',
+    originalInstruction: (d.original && d.original.instruction) || '',
+  });
+  STATE._impDraft = null;
+  closeImperfectionInjectModal();
+  markUnsaved();
+  renderTab(STATE.currentTab);
+}
+
+// Zet de (AI-geïnjecteerde) stap terug naar de bewaarde originele tekst en verwijder het record.
+function restoreImperfectionStep(i) {
+  const sc = STATE.current;
+  if (!sc || !Array.isArray(sc.sopImperfections)) return;
+  const imp = sc.sopImperfections[i];
+  if (!imp) return;
+  const step = (sc.sop?.steps || []).find(s => s.id === imp.stepId);
+  if (step) {
+    if (imp.originalLabel) step.label = imp.originalLabel;
+    if (imp.originalInstruction) step.instruction = imp.originalInstruction;
+  }
+  sc.sopImperfections.splice(i, 1);
+  markUnsaved();
+  renderTab(STATE.currentTab);
 }
 
 /* — HOLD-POINTS — */
@@ -5146,6 +6017,52 @@ function renderFromActionField(signal, signalIdx) {
     <div class="form-group">
       <label class="field-label">${t('signals.fromActionLabel')} <span class="hint">${t('signals.fromActionHint')}</span></label>
       <select onchange="updateField('observableSignals.${signalIdx}.fromActionId', this.value)">${opts}</select>
+    </div>`;
+}
+
+// Read-only overzicht van de omgevingssignalen in de Taak-tab.
+// Bewerken gebeurt op één plek: per locatie in de Locaties-tab (geen dubbele invoer).
+function renderSignalsSummary() {
+  const sc = STATE.current;
+  const signals = sc.observableSignals || [];
+  const sigLabels = {}; dictSignificance().forEach(s => sigLabels[s.id] = s.label);
+  const sigColor = { significant: 'var(--red)', notable: 'var(--amber)', distractor: 'var(--text-dim)' };
+  const locName = (id) => { const l = (sc.locations || []).find(x => x.id === id); return l ? (l.label || l.id) : t('taak.envSignalsNoLoc'); };
+
+  const counts = { significant: 0, notable: 0, distractor: 0 };
+  signals.forEach(s => { if (counts[s.significance] !== undefined) counts[s.significance]++; });
+
+  let rows;
+  if (!signals.length) {
+    rows = `<div class="array-empty">${t('signals.emptyAll')}</div>`;
+  } else {
+    const byLoc = {};
+    signals.forEach(s => { const k = s.locationId || ''; (byLoc[k] = byLoc[k] || []).push(s); });
+    rows = Object.keys(byLoc).map(locId => {
+      const items = byLoc[locId].map(s => `
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--border)">
+          <span style="font-size:10px;font-family:var(--mono);padding:1px 7px;border-radius:999px;border:1px solid var(--border-strong);color:${sigColor[s.significance] || 'var(--text-dim)'}">${escapeHtml(sigLabels[s.significance] || s.significance || '')}</span>
+          <span style="font-size:11px;font-family:var(--mono);color:var(--text-dim)">${escapeHtml(dictPhaseProc()[s.phase] || s.phase || '')}</span>
+          <span style="font-size:12.5px;color:var(--text-2);flex:1">${escapeHtml((s.description || '').slice(0, 100))}</span>
+        </div>`).join('');
+      return `<div style="margin-bottom:12px">
+        <div style="font-size:12px;font-weight:600;color:var(--accent)">${escapeHtml(locName(locId))} <span style="color:var(--text-dim);font-weight:400">· ${byLoc[locId].length}</span></div>
+        ${items}
+      </div>`;
+    }).join('');
+  }
+
+  const mix = signals.length ? t('signals.mix', { scope: '', sig: counts.significant, notable: counts.notable, dist: counts.distractor }) : '';
+
+  return `
+    <div class="section">
+      <div class="section-title">${t('taak.envSignals')}</div>
+      <div class="section-help">${t('taak.envSignalsReadonly')}</div>
+      ${mix ? `<div class="section-help" style="margin-bottom:12px"><strong>${escapeHtml(mix)}</strong></div>` : ''}
+      ${rows}
+      <div style="margin-top:12px">
+        <button class="btn btn-sm" onclick="switchTab('locaties')">${t('taak.envSignalsManage')}</button>
+      </div>
     </div>`;
 }
 
