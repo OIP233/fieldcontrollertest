@@ -1178,12 +1178,10 @@ select {
 /* ───── 1. CONSTANTS ───── */
 const STORAGE_KEY = 'oip_field_controller_scenarios_v1';
 const COMPANY_STORAGE_KEY = 'oip_field_controller_company_profiles_v1';
-// Optie 1 (tussenstap): controller-brede Anthropic API-sleutel. Eén keer door de
-// scenariobouwer ingevoerd, bewaard op dit apparaat, en bij export in het scenario
-// gebakken (top-level apiKey) zodat deelnemers hem niet hoeven in te voeren.
-const APIKEY_STORAGE_KEY = 'oip_field_controller_apikey_v1';
-let CONTROLLER_API_KEY = '';
-try { CONTROLLER_API_KEY = localStorage.getItem(APIKEY_STORAGE_KEY) || ''; } catch (e) { CONTROLLER_API_KEY = ''; }
+// AI-calls (taakstructurering / onvolkomenheden) lopen via de Netlify-proxy,
+// zodat er geen Anthropic API-sleutel in de controller of de export zit. De proxy
+// voegt model + key server-side toe. Pas deze URL aan bij een andere sitenaam.
+const AI_PROXY_URL = 'https://livescenario-proxy.netlify.app/ai';
 const SCHEMA_VERSION = 5;
 
 /* ════════════════════════════════════════════════════════════════
@@ -4090,18 +4088,6 @@ function exportCurrent() {
  * embedded context — it doesn't need access to the controller's profile
  * library. The original linkedProfileId is preserved for round-tripping.
  */
-// Bewaart de controller-brede API-sleutel op dit apparaat (optie 1, tussenstap).
-function setControllerApiKey(v) {
-  CONTROLLER_API_KEY = (v || '').trim();
-  try {
-    if (CONTROLLER_API_KEY) localStorage.setItem(APIKEY_STORAGE_KEY, CONTROLLER_API_KEY);
-    else localStorage.removeItem(APIKEY_STORAGE_KEY);
-  } catch (e) { /* localStorage niet beschikbaar */ }
-  // Bevestiging tonen/verbergen zonder de tab te herrenderen (focus blijft in het veld).
-  const ok = document.getElementById('apikey-set-indicator');
-  if (ok) ok.style.display = CONTROLLER_API_KEY ? 'block' : 'none';
-}
-
 function prepareForExport(sc) {
   const copy = JSON.parse(JSON.stringify(sc));
   const profile = getCompanyProfile(sc.linkedProfileId);
@@ -4112,9 +4098,7 @@ function prepareForExport(sc) {
   } else {
     copy.companyContext = null;
   }
-  // Optie 1: de controller-brede API-sleutel meebakken (alleen als ingesteld),
-  // zodat de player hem leest en deelnemers niets hoeven in te voeren.
-  if (CONTROLLER_API_KEY) copy.apiKey = CONTROLLER_API_KEY;
+  // Geen API-sleutel meer meebakken: de player roept de proxy aan (key server-side).
   // Uitvoeringstaal altijd expliciet meegeven; de player selecteert hem voor.
   copy.executionLanguage = sc.executionLanguage || 'nl';
   return copy;
@@ -4527,12 +4511,6 @@ TAB_RENDERERS.basis = function() {
           <select onchange="updateField('executionLanguage', this.value)">
             ${['nl','de','en','es'].map(L => `<option value="${L}" ${(sc.executionLanguage || 'nl') === L ? 'selected' : ''}>${({nl:'Nederlands',de:'Deutsch',en:'English',es:'Español'})[L]}</option>`).join('')}
           </select>
-        </div>
-        <div class="form-group">
-          <label class="field-label">${t('basis.apiKey')}</label>
-          <input type="password" autocomplete="off" placeholder="sk-ant-..." value="${escapeAttr(CONTROLLER_API_KEY)}" oninput="setControllerApiKey(this.value)">
-          <div style="font-size:11px;color:var(--text-dim);margin-top:4px;line-height:1.5">${t('basis.apiKeyHint')}</div>
-          <div id="apikey-set-indicator" style="display:${CONTROLLER_API_KEY ? 'block' : 'none'};font-size:11px;color:var(--ok,#2e9e5b);margin-top:4px">${t('basis.apiKeySet')}</div>
         </div>
       </div>
     </div>
@@ -5212,7 +5190,6 @@ async function structureSopFromSource() {
   const sc = STATE.current;
   if (!sc || sc.scenarioType === 'incident') return;
   const src = (sc.sop && sc.sop.sourceText || '').trim();
-  if (!CONTROLLER_API_KEY) { toast(t('taak.sopStructNoKey')); return; }
   if (!src) { toast(t('taak.sopStructNoText')); return; }
 
   const btn = document.getElementById('sop-structure-btn');
@@ -5247,16 +5224,10 @@ SOP-tekst:
 ${src}
 """`;
 
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch(AI_PROXY_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': CONTROLLER_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
         max_tokens: 2500,
         messages: [{ role: 'user', content: prompt }],
       }),
@@ -5545,7 +5516,6 @@ function parseImperfectionJSON(text) {
 async function injectImperfectionAI() {
   const sc = STATE.current;
   if (!sc) return;
-  if (!CONTROLLER_API_KEY) { toast(t('taak.sopStructNoKey')); return; }
   const stepId = document.getElementById('imp-inject-step')?.value || '';
   const type = document.getElementById('imp-inject-type')?.value || 'value';
   const isDistractor = !!document.getElementById('imp-inject-distractor')?.checked;
@@ -5580,16 +5550,10 @@ Antwoord met UITSLUITEND een JSON-object (geen uitleg, geen code-fences) met EXA
 }
 Schrijf in dezelfde taal als de stap.`;
 
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch(AI_PROXY_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': CONTROLLER_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
         max_tokens: 1200,
         messages: [{ role: 'user', content: prompt }],
       }),
