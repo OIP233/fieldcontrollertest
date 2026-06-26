@@ -1182,6 +1182,20 @@ const COMPANY_STORAGE_KEY = 'oip_field_controller_company_profiles_v1';
 // zodat er geen Anthropic API-sleutel in de controller of de export zit. De proxy
 // voegt model + key server-side toe. Pas deze URL aan bij een andere sitenaam.
 const AI_PROXY_URL = 'https://livescenario-proxy.netlify.app/ai';
+
+// ── Toegang (stap 3) ─────────────────────────────────────────────────────
+// Token uit de URL-hash (#tok=…), gezet door de portal/deellink. Gaat met
+// elke proxy-call mee; de proxy bepaalt de toegang (vestiging/demo,
+// einddatum, toegestane varianten). Geen geldig token → de proxy weigert
+// (zodra ENFORCE_ACCESS aanstaat).
+const APP_ID = 'field-controller';
+function readAccessToken() {
+  try {
+    const p = new URLSearchParams((location.hash || '').replace(/^#/, ''));
+    return p.get('tok') || p.get('token') || '';
+  } catch (_) { return ''; }
+}
+const ACCESS_TOKEN = readAccessToken();
 const SCHEMA_VERSION = 5;
 
 /* ════════════════════════════════════════════════════════════════
@@ -5228,6 +5242,7 @@ ${src}
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        token: ACCESS_TOKEN, app: APP_ID,
         max_tokens: 2500,
         messages: [{ role: 'user', content: prompt }],
       }),
@@ -5554,6 +5569,7 @@ Schrijf in dezelfde taal als de stap.`;
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        token: ACCESS_TOKEN, app: APP_ID,
         max_tokens: 1200,
         messages: [{ role: 'user', content: prompt }],
       }),
