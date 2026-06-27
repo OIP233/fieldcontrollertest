@@ -1196,6 +1196,19 @@ function readAccessToken() {
   } catch (_) { return ''; }
 }
 const ACCESS_TOKEN = readAccessToken();
+function accessDeniedMessage(reason) {
+  switch (reason) {
+    case 'expired': return 'Deze toegang is verlopen. Vraag de organisator om een nieuwe deellink.\n(Access expired — please ask the organiser for a new link.)';
+    case 'variant_not_allowed': return 'Deze variant valt buiten jouw toegang. Neem contact op met de organisator.\n(This scenario type is not included in your access.)';
+    default: return 'Geen geldige toegang. Open de app via je persoonlijke deellink (met token), of neem contact op met de organisator.\n(No valid access — open the app via your personal share link.)';
+  }
+}
+async function aiProxyError(res) {
+  let reason = '', emsg = '';
+  try { const j = await res.json(); reason = j.reason || ''; emsg = (j.error && (j.error.message || j.error)) || j.error || ''; } catch (_) {}
+  if (res.status === 403) { const e = new Error(accessDeniedMessage(reason)); e.access = true; return e; }
+  return new Error('API ' + res.status + (emsg ? ': ' + emsg : ''));
+}
 const SCHEMA_VERSION = 5;
 
 /* ════════════════════════════════════════════════════════════════
@@ -5248,11 +5261,7 @@ ${src}
       }),
     });
 
-    if (!res.ok) {
-      let detail = 'HTTP ' + res.status;
-      try { const eb = await res.json(); if (eb && eb.error && eb.error.message) detail += ' — ' + eb.error.message; } catch (e) {}
-      throw new Error(detail);
-    }
+    if (!res.ok) throw await aiProxyError(res);
 
     const data = await res.json();
     const text = (data.content || []).map(b => b && b.text || '').join('').trim();
@@ -5574,11 +5583,7 @@ Schrijf in dezelfde taal als de stap.`;
         messages: [{ role: 'user', content: prompt }],
       }),
     });
-    if (!res.ok) {
-      let detail = 'HTTP ' + res.status;
-      try { const eb = await res.json(); if (eb && eb.error && eb.error.message) detail += ' — ' + eb.error.message; } catch (e) {}
-      throw new Error(detail);
-    }
+    if (!res.ok) throw await aiProxyError(res);
     const data = await res.json();
     const txt = (data.content || []).map(b => b && b.text || '').join('').trim();
     const obj = parseImperfectionJSON(txt);
