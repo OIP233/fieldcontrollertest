@@ -1499,6 +1499,9 @@ const I18N = {
       lsrTags: 'LSR-tags', lsrTagsHint: 'Life-Saving Rules die in deze actie relevant zijn',
       phaseDir: 'AI-regie — {phase}',
       phaseDirPlaceholder: "bv. 'Laat deelnemer eerst zelf observeren; CRO is niet op de hoogte'",
+      phaseLoc: 'Locatie bij deze fase',
+      phaseLocHint: 'de deelnemer wordt hierheen verplaatst zodra deze fase begint — leeg laten om op de huidige locatie te blijven',
+      phaseLocNone: '— blijf op huidige locatie —',
       initialEvent: 'Initial event',
       initialEventHelp: 'Het moment waarop het incident voor de deelnemer bestaat. Let op het onderscheid tussen wat de <strong>AI regisseert</strong> (volledig, verklappend) en wat de <strong>deelnemer in beeld ziet</strong> (kort, niet-verklappend). De deelnemer moet zelf ontdekken wat er aan de hand is.',
       eventType: 'Type aanleiding',
@@ -1920,6 +1923,9 @@ const I18N = {
       lsrTags: 'LSR tags', lsrTagsHint: 'Life-Saving Rules relevant to this action',
       phaseDir: 'AI direction — {phase}',
       phaseDirPlaceholder: "e.g. 'Let the participant observe for themselves first; CRO is unaware'",
+      phaseLoc: 'Location for this phase',
+      phaseLocHint: 'the participant is moved here as soon as this phase starts — leave empty to stay at the current location',
+      phaseLocNone: '— stay at current location —',
       initialEvent: 'Initial event',
       initialEventHelp: 'The moment the incident exists for the participant. Note the distinction between what the <strong>AI directs</strong> (full, revealing) and what the <strong>participant sees on screen</strong> (short, non-revealing). The participant must discover for themselves what is going on.',
       eventType: 'Trigger type',
@@ -2341,6 +2347,9 @@ const I18N = {
       lsrTags: 'LSR-Tags', lsrTagsHint: 'Life-Saving Rules, die in dieser Aktion relevant sind',
       phaseDir: 'KI-Regie — {phase}',
       phaseDirPlaceholder: "z. B. 'Teilnehmer zuerst selbst beobachten lassen; CRO ist nicht informiert'",
+      phaseLoc: 'Standort für diese Phase',
+      phaseLocHint: 'der Teilnehmer wird hierher versetzt, sobald diese Phase beginnt — leer lassen, um am aktuellen Standort zu bleiben',
+      phaseLocNone: '— am aktuellen Standort bleiben —',
       initialEvent: 'Initial Event',
       initialEventHelp: 'Der Moment, in dem der Incident für den Teilnehmer existiert. Beachten Sie den Unterschied zwischen dem, was die <strong>KI regie führt</strong> (vollständig, verräterisch), und dem, was der <strong>Teilnehmer im Bild sieht</strong> (kurz, nicht verräterisch). Der Teilnehmer muss selbst herausfinden, was los ist.',
       eventType: 'Art des Auslösers',
@@ -2762,6 +2771,9 @@ const I18N = {
       lsrTags: 'Etiquetas LSR', lsrTagsHint: 'Life-Saving Rules relevantes en esta acción',
       phaseDir: 'Dirección de IA — {phase}',
       phaseDirPlaceholder: "p. ej. 'Deje que el participante observe primero por sí mismo; el CRO no está al tanto'",
+      phaseLoc: 'Ubicación de esta fase',
+      phaseLocHint: 'el participante se traslada aquí en cuanto empieza esta fase — dejar vacío para permanecer en la ubicación actual',
+      phaseLocNone: '— permanecer en la ubicación actual —',
       initialEvent: 'Evento inicial',
       initialEventHelp: 'El momento en que el incident existe para el participante. Observe la distinción entre lo que la <strong>IA dirige</strong> (completo, revelador) y lo que el <strong>participante ve en pantalla</strong> (breve, no revelador). El participante debe descubrir por sí mismo qué ocurre.',
       eventType: 'Tipo de desencadenante',
@@ -4018,7 +4030,10 @@ function normalizeScenario(sc) {
     if (!sc.referenceProcedure)     sc.referenceProcedure = { title: '', reference: '', summary: '', guidelines: [] };
     if (!Array.isArray(sc.referenceProcedure.guidelines)) sc.referenceProcedure.guidelines = [];
     if (!sc.phaseConfig)            sc.phaseConfig = {};
-    PHASES_INC.forEach(p => { if (!sc.phaseConfig[p]) sc.phaseConfig[p] = { dir: '' }; });
+    PHASES_INC.forEach(p => { if (!sc.phaseConfig[p]) sc.phaseConfig[p] = { dir: '', locationId: '' }; });
+    // locationId per fase — bepaalt waar de deelnemer heen gaat bij de fasewissel.
+    // Leeg = blijven waar hij is (en dus het gedrag van vóór dit veld).
+    PHASES_INC.forEach(p => { if (typeof sc.phaseConfig[p].locationId !== 'string') sc.phaseConfig[p].locationId = ''; });
     // Strip legacy phase keys (onset/respond/secure waren v5)
     ['onset','respond','secure'].forEach(p => { if (p in sc.phaseConfig) delete sc.phaseConfig[p]; });
     if (!sc.storylineUrls)          sc.storylineUrls = {};
@@ -4339,6 +4354,35 @@ function validateScenario(sc) {
     // Locatie-referentie in initialEvent moet bestaan (waarschuwing — niet blokkerend voor player)
     if (sc.initialEvent?.location && !sc.locations?.find(l => l.id === sc.initialEvent.location)) {
       issues.push({ tab:'incident', msg: 'initialEvent.location verwijst naar onbekende locatie' });
+    }
+    // Locatie per fase: referentie moet bestaan, en de assess-locatie moet gelijk
+    // zijn aan de startlocatie — de player start rechtstreeks in assess en doet
+    // daar geen fasewissel, dus een afwijkende assess-locatie wordt genegeerd.
+    PHASES_INC.forEach(p => {
+      const locId = sc.phaseConfig?.[p]?.locationId;
+      if (!locId) return;
+      if (!sc.locations?.find(l => l.id === locId)) {
+        issues.push({ tab:'incident', msg: `Fase '${p}': locatie verwijst naar onbekende locatie` });
+      } else if (p === 'assess' && sc.participant?.startLocationId && locId !== sc.participant.startLocationId) {
+        issues.push({ tab:'incident', msg: "Locatie van fase 'assess' wijkt af van de startlocatie — de player start in assess en negeert deze keuze" });
+      }
+    });
+    // Signalen op een locatie die nooit bereikt wordt zijn onzichtbaar: de player
+    // filtert op huidige locatie. Bereikbaar = startlocatie of een fase-locatie.
+    const reachableLocs = new Set(
+      [sc.participant?.startLocationId, ...PHASES_INC.map(p => sc.phaseConfig?.[p]?.locationId)]
+        .filter(Boolean)
+    );
+    if (reachableLocs.size) {
+      const unreachable = new Set(
+        (sc.observableSignals || [])
+          .map(s => s.locationId)
+          .filter(id => id && !reachableLocs.has(id))
+      );
+      unreachable.forEach(id => {
+        const label = sc.locations?.find(l => l.id === id)?.label || id;
+        issues.push({ tab:'incident', msg: `Signalen op locatie '${label}' worden nooit getoond — geen enkele fase brengt de deelnemer daarheen` });
+      });
     }
   } else {
     // Procedural-specific validation
@@ -5841,11 +5885,20 @@ TAB_RENDERERS.incident = function() {
           </div>`;
       }).join('');
 
-  // Phase directions block — AI-regie per fase
+  // Phase directions block — AI-regie per fase, plus de locatie die bij de fase
+  // hoort. Een incident heeft geen SOP-stappen om de locatie uit af te leiden;
+  // zonder deze keuze blijft de deelnemer de hele run op de startlocatie staan.
+  const phaseLocOpts = (sel) => [`<option value="">${t('incident.phaseLocNone')}</option>`]
+    .concat((sc.locations || []).map(l =>
+      `<option value="${escapeAttr(l.id)}" ${sel === l.id ? 'selected' : ''}>${escapeHtml(l.label || l.id)}</option>`
+    )).join('');
+
   const phaseDirs = PHASES_INC.map(p => `
     <div class="form-group">
       <label class="field-label">${t('incident.phaseDir', { phase: dictPhaseInc()[p] })}</label>
       <textarea rows="2" oninput="updateField('phaseConfig.${p}.dir', this.value)" placeholder="${t('incident.phaseDirPlaceholder')}">${escapeHtml(pc[p]?.dir || '')}</textarea>
+      <label class="field-label" style="margin-top:8px">${t('incident.phaseLoc')} <span class="hint">${t('incident.phaseLocHint')}</span></label>
+      <select onchange="updateField('phaseConfig.${p}.locationId', this.value)">${phaseLocOpts(pc[p]?.locationId || '')}</select>
     </div>`).join('');
 
   // Reference procedure (optional)
